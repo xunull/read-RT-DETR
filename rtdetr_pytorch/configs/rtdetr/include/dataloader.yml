@@ -1,23 +1,23 @@
 # num_classes: 91
 # remap_mscoco_category: True
 
-train_dataloader: 
-  dataset: 
+train_dataloader:
+  dataset:
     return_masks: False
     transforms:
       ops:
-        - {type: RandomPhotometricDistort, p: 0.8}
-        - {type: RandomZoomOut, fill: 0}
-        - {type: RandomIoUCrop, p: 0.8}
-        - {type: SanitizeBoundingBox, min_size: 1}
-        - {type: RandomHorizontalFlip}
-        - {type: Resize, size: [640, 640], }
+        - { type: RandomPhotometricDistort, p: 0.8 }
+        - { type: RandomZoomOut, fill: 0 }
+        - { type: RandomIoUCrop, p: 0.8 }
+        - { type: SanitizeBoundingBox, min_size: 1 }
+        - { type: RandomHorizontalFlip }
+        - { type: Resize, size: [ 640, 640 ], }
         # - {type: Resize, size: 639, max_size: 640}
         # - {type: PadToSize, spatial_size: 640}
-        - {type: ToImageTensor}
-        - {type: ConvertDtype}
-        - {type: SanitizeBoundingBox, min_size: 1}
-        - {type: ConvertBox, out_fmt: 'cxcywh', normalize: True}
+        - { type: ToImageTensor }
+        - { type: ConvertDtype }
+        - { type: SanitizeBoundingBox, min_size: 1 }
+        - { type: ConvertBox, out_fmt: 'cxcywh', normalize: True }
   shuffle: True
   batch_size: 4
   num_workers: 4
@@ -25,14 +25,14 @@ train_dataloader:
 
 
 val_dataloader:
-  dataset: 
+  dataset:
     transforms:
-      ops: 
+      ops:
         # - {type: Resize, size: 639, max_size: 640}
         # - {type: PadToSize, spatial_size: 640}
-        - {type: Resize, size: [640, 640]}
-        - {type: ToImageTensor}
-        - {type: ConvertDtype}
+        - { type: Resize, size: [ 640, 640 ] }
+        - { type: ToImageTensor }
+        - { type: ConvertDtype }
   shuffle: False
   batch_size: 8
   num_workers: 4

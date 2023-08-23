@@ -12,7 +12,7 @@ import pathlib
 from typing import Iterable
 
 import torch
-import torch.amp 
+import torch.amp
 
 from src.data import CocoEvaluator
 from src.misc import (MetricLogger, SmoothedValue, reduce_dict)
@@ -28,7 +28,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     # metric_logger.add_meter('class_error', SmoothedValue(window_size=1, fmt='{value:.2f}'))
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = kwargs.get('print_freq', 10)
-    
+
     ema = kwargs.get('ema', None)
     scaler = kwargs.get('scaler', None)
 
@@ -39,13 +39,13 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         if scaler is not None:
             with torch.autocast(device_type=str(device), cache_enabled=True):
                 outputs = model(samples, targets)
-            
+
             with torch.autocast(device_type=str(device), enabled=False):
                 loss_dict = criterion(outputs, targets)
 
             loss = sum(loss_dict.values())
             scaler.scale(loss).backward()
-            
+
             if max_norm > 0:
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
@@ -55,18 +55,20 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             optimizer.zero_grad()
 
         else:
+            # 经过网络
             outputs = model(samples, targets)
+            # 计算loss
             loss_dict = criterion(outputs, targets)
-            
+
             loss = sum(loss_dict.values())
             optimizer.zero_grad()
             loss.backward()
-            
+
             if max_norm > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
 
             optimizer.step()
-        
+
         # ema 
         if ema is not None:
             ema.update(model)
@@ -88,9 +90,9 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
-
 @torch.no_grad()
-def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessors, data_loader, base_ds, device, output_dir):
+def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessors, data_loader, base_ds, device,
+             output_dir):
     model.eval()
     criterion.eval()
 
@@ -133,7 +135,7 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessors,
         #                      **loss_dict_reduced_unscaled)
         # metric_logger.update(class_error=loss_dict_reduced['class_error'])
 
-        orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)        
+        orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors(outputs, orig_target_sizes)
         # results = postprocessors(outputs, targets)
 
@@ -170,7 +172,7 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessors,
     # panoptic_res = None
     # if panoptic_evaluator is not None:
     #     panoptic_res = panoptic_evaluator.summarize()
-    
+
     stats = {}
     # stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
     if coco_evaluator is not None:
@@ -178,13 +180,10 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessors,
             stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
         if 'segm' in iou_types:
             stats['coco_eval_masks'] = coco_evaluator.coco_eval['segm'].stats.tolist()
-            
+
     # if panoptic_res is not None:
     #     stats['PQ_all'] = panoptic_res["All"]
     #     stats['PQ_th'] = panoptic_res["Things"]
     #     stats['PQ_st'] = panoptic_res["Stuff"]
 
     return stats, coco_evaluator
-
-
-
