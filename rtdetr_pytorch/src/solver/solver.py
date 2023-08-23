@@ -1,11 +1,11 @@
 """by lyuwenyu
 """
 
-import torch 
-import torch.nn as nn 
+import torch
+import torch.nn as nn
 
 from datetime import datetime
-from pathlib import Path 
+from pathlib import Path
 
 from src.misc import dist
 from src.core import BaseConfig
@@ -13,8 +13,8 @@ from src.core import BaseConfig
 
 class BaseSolver(object):
     def __init__(self, cfg: BaseConfig) -> None:
-        
-        self.cfg = cfg 
+
+        self.cfg = cfg
 
     def setup(self, ):
         '''Avoid instantiating unnecessary classes 
@@ -29,11 +29,10 @@ class BaseSolver(object):
         self.postprocessor = cfg.postprocessor
 
         self.scaler = cfg.scaler
-        self.ema = cfg.ema.to(device) if cfg.ema is not None else None 
+        self.ema = cfg.ema.to(device) if cfg.ema is not None else None
 
         self.output_dir = Path(cfg.output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
 
     def train(self, ):
         self.setup()
@@ -46,20 +45,18 @@ class BaseSolver(object):
             self.resume(self.cfg.resume)
 
         self.train_dataloader = dist.warp_loader(self.cfg.train_dataloader, \
-            shuffle=self.cfg.train_dataloader.shuffle)
+                                                 shuffle=self.cfg.train_dataloader.shuffle)
         self.val_dataloader = dist.warp_loader(self.cfg.val_dataloader, \
-            shuffle=self.cfg.val_dataloader.shuffle)
-
+                                               shuffle=self.cfg.val_dataloader.shuffle)
 
     def eval(self, ):
         self.setup()
         self.val_dataloader = dist.warp_loader(self.cfg.val_dataloader, \
-            shuffle=self.cfg.val_dataloader.shuffle)
+                                               shuffle=self.cfg.val_dataloader.shuffle)
 
         if self.cfg.resume:
             print(f'resume from {self.cfg.resume}')
             self.resume(self.cfg.resume)
-
 
     def state_dict(self, last_epoch):
         '''state dict
@@ -85,7 +82,6 @@ class BaseSolver(object):
             state['scaler'] = self.scaler.state_dict()
 
         return state
-
 
     def load_state_dict(self, state):
         '''load state dict
@@ -118,13 +114,11 @@ class BaseSolver(object):
             self.scaler.load_state_dict(state['scaler'])
             print('Loading scaler.state_dict')
 
-
     def save(self, path):
         '''save state
         '''
         state = self.state_dict()
         dist.save_on_master(state, path)
-
 
     def resume(self, path):
         '''load resume
@@ -133,10 +127,8 @@ class BaseSolver(object):
         state = torch.load(path, map_location='cpu')
         self.load_state_dict(state)
 
-
     def fit(self, ):
         raise NotImplementedError('')
-
 
     def val(self, ):
         raise NotImplementedError('')
