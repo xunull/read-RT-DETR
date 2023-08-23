@@ -100,6 +100,7 @@ class CSPRepLayer(nn.Module):
         hidden_channels = int(out_channels * expansion)
         self.conv1 = ConvNormLayer(in_channels, hidden_channels, 1, 1, bias=bias, act=act)
         self.conv2 = ConvNormLayer(in_channels, hidden_channels, 1, 1, bias=bias, act=act)
+        # todo
         self.bottlenecks = nn.Sequential(*[
             RepVggBlock(hidden_channels, hidden_channels, act=act) for _ in range(num_blocks)
         ])
@@ -115,7 +116,7 @@ class CSPRepLayer(nn.Module):
         return self.conv3(x_1 + x_2)
 
 
-# transformer
+# 最内的encoder layer，就是一个正常的attention
 class TransformerEncoderLayer(nn.Module):
     def __init__(self,
                  d_model,
@@ -173,6 +174,7 @@ class TransformerEncoder(nn.Module):
 
     def forward(self, src, src_mask=None, pos_embed=None) -> torch.Tensor:
         output = src
+        # 经过encoder
         for layer in self.layers:
             output = layer(output, src_mask=src_mask, pos_embed=pos_embed)
 
@@ -182,6 +184,7 @@ class TransformerEncoder(nn.Module):
         return output
 
 
+# encoder
 @register
 class HybridEncoder(nn.Module):
     def __init__(self,
@@ -192,6 +195,7 @@ class HybridEncoder(nn.Module):
                  dim_feedforward=1024,
                  dropout=0.0,
                  enc_act='gelu',
+                 # s3 s4 s5, s5的index为2
                  use_encoder_idx=[2],
                  # encoder的层数
                  num_encoder_layers=1,
@@ -212,6 +216,7 @@ class HybridEncoder(nn.Module):
         self.out_channels = [hidden_dim for _ in range(len(in_channels))]
         self.out_strides = feat_strides
 
+        # 2d feature to transformer token
         # channel projection
         self.input_proj = nn.ModuleList()
         for in_channel in in_channels:
@@ -287,10 +292,13 @@ class HybridEncoder(nn.Module):
 
     def forward(self, feats):
         assert len(feats) == len(self.in_channels)
+        # 2d feature to transformer token
         proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
 
+        # 论文中使用了1层
         # encoder
         if self.num_encoder_layers > 0:
+            # 只有s5 输入到encoder中，s3 s4的特征不进入encoder
             for i, enc_ind in enumerate(self.use_encoder_idx):
                 h, w = proj_feats[enc_ind].shape[2:]
                 # flatten [B, C, H, W] to [B, HxW, C]
@@ -301,12 +309,16 @@ class HybridEncoder(nn.Module):
                 else:
                     pos_embed = getattr(self, f'pos_embed{enc_ind}', None).to(src_flatten.device)
 
+                # 经过encoder
                 memory = self.encoder[i](src_flatten, pos_embed=pos_embed)
+                # s5的特征经过了encoder
                 proj_feats[enc_ind] = memory.permute(0, 2, 1).reshape(-1, self.hidden_dim, h, w).contiguous()
                 # print([x.is_contiguous() for x in proj_feats ])
 
         # broadcasting and fusion
         inner_outs = [proj_feats[-1]]
+
+        # idx = 2, 1
         for idx in range(len(self.in_channels) - 1, 0, -1):
             feat_heigh = inner_outs[0]
             feat_low = proj_feats[idx - 1]

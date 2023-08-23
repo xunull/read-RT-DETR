@@ -5,10 +5,9 @@ https://github.com/facebookresearch/detr/blob/main/models/detr.py
 by lyuwenyu
 """
 
-
-import torch 
-import torch.nn as nn 
-import torch.nn.functional as F 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
 
 # from torchvision.ops import box_convert, generalized_box_iou
@@ -16,7 +15,6 @@ from .box_ops import box_cxcywh_to_xyxy, box_iou, generalized_box_iou
 
 from src.misc.dist import get_world_size, is_dist_available_and_initialized
 from src.core import register
-
 
 
 @register
@@ -42,7 +40,7 @@ class SetCriterion(nn.Module):
         self.num_classes = num_classes
         self.matcher = matcher
         self.weight_dict = weight_dict
-        self.losses = losses 
+        self.losses = losses
 
         empty_weight = torch.ones(self.num_classes + 1)
         empty_weight[-1] = eos_coef
@@ -50,7 +48,6 @@ class SetCriterion(nn.Module):
 
         self.alpha = alpha
         self.gamma = gamma
-
 
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
         """Classification loss (NLL)
@@ -96,7 +93,7 @@ class SetCriterion(nn.Module):
                                     dtype=torch.int64, device=src_logits.device)
         target_classes[idx] = target_classes_o
 
-        target = F.one_hot(target_classes, num_classes=self.num_classes+1)[..., :-1]
+        target = F.one_hot(target_classes, num_classes=self.num_classes + 1)[..., :-1]
         # ce_loss = F.binary_cross_entropy_with_logits(src_logits, target * 1., reduction="none")
         # prob = F.sigmoid(src_logits) # TODO .detach()
         # p_t = prob * target + (1 - prob) * (1 - target)
@@ -114,6 +111,7 @@ class SetCriterion(nn.Module):
 
         src_boxes = outputs['pred_boxes'][idx]
         target_boxes = torch.cat([t['boxes'][i] for t, (_, i) in zip(targets, indices)], dim=0)
+        # 计算iou
         ious, _ = box_iou(box_cxcywh_to_xyxy(src_boxes), box_cxcywh_to_xyxy(target_boxes))
         ious = torch.diag(ious).detach()
 
@@ -130,7 +128,7 @@ class SetCriterion(nn.Module):
 
         pred_score = F.sigmoid(src_logits).detach()
         weight = self.alpha * pred_score.pow(self.gamma) * (1 - target) + target_score
-        
+
         loss = F.binary_cross_entropy_with_logits(src_logits, target_score, weight=weight, reduction='none')
         loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
         return {'loss_vfl': loss}
@@ -165,8 +163,8 @@ class SetCriterion(nn.Module):
         losses['loss_bbox'] = loss_bbox.sum() / num_boxes
 
         loss_giou = 1 - torch.diag(generalized_box_iou(
-                box_cxcywh_to_xyxy(src_boxes),
-                box_cxcywh_to_xyxy(target_boxes)))
+            box_cxcywh_to_xyxy(src_boxes),
+            box_cxcywh_to_xyxy(target_boxes)))
         losses['loss_giou'] = loss_giou.sum() / num_boxes
         return losses
 
@@ -300,7 +298,7 @@ class SetCriterion(nn.Module):
         dn_positive_idx, dn_num_group = dn_meta["dn_positive_idx"], dn_meta["dn_num_group"]
         num_gts = [len(t['labels']) for t in targets]
         device = targets[0]['labels'].device
-        
+
         dn_match_indices = []
         for i, num_gt in enumerate(num_gts):
             if num_gt > 0:
@@ -310,12 +308,9 @@ class SetCriterion(nn.Module):
                 dn_match_indices.append((dn_positive_idx[i], gt_idx))
             else:
                 dn_match_indices.append((torch.zeros(0, dtype=torch.int64, device=device), \
-                    torch.zeros(0, dtype=torch.int64,  device=device)))
-        
+                                         torch.zeros(0, dtype=torch.int64, device=device)))
+
         return dn_match_indices
-
-
-
 
 
 @torch.no_grad()
@@ -335,7 +330,3 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
-
-
-
-
