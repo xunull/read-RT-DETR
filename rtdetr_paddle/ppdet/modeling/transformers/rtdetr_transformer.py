@@ -61,9 +61,9 @@ class PPMSDeformableAttention(MSDeformableAttention):
             ]) + sampling_offsets / offset_normalizer
         elif reference_points.shape[-1] == 4:
             sampling_locations = (
-                reference_points[:, :, None, :, None, :2] + sampling_offsets /
-                self.num_points * reference_points[:, :, None, :, None, 2:] *
-                0.5)
+                    reference_points[:, :, None, :, None, :2] + sampling_offsets /
+                    self.num_points * reference_points[:, :, None, :, None, 2:] *
+                    0.5)
         else:
             raise ValueError(
                 "Last dim of reference_points must be 2 or 4, but get {} instead.".
@@ -276,6 +276,7 @@ class RTDETRTransformer(nn.Layer):
         # backbone feature projection
         self._build_input_proj_layer(backbone_feat_channels)
 
+        # decoder
         # Transformer module
         decoder_layer = TransformerDecoderLayer(
             hidden_dim, nhead, dim_feedforward, dropout, activation, num_levels,
@@ -360,9 +361,9 @@ class RTDETRTransformer(nn.Layer):
                         self.hidden_dim,
                         kernel_size=1,
                         bias_attr=False)), ('norm', nn.BatchNorm2D(
-                            self.hidden_dim,
-                            weight_attr=ParamAttr(regularizer=L2Decay(0.0)),
-                            bias_attr=ParamAttr(regularizer=L2Decay(0.0))))))
+                        self.hidden_dim,
+                        weight_attr=ParamAttr(regularizer=L2Decay(0.0)),
+                        bias_attr=ParamAttr(regularizer=L2Decay(0.0))))))
         in_channels = backbone_feat_channels[-1]
         for _ in range(self.num_levels - len(backbone_feat_channels)):
             self.input_proj.append(
@@ -374,9 +375,9 @@ class RTDETRTransformer(nn.Layer):
                         stride=2,
                         padding=1,
                         bias_attr=False)), ('norm', nn.BatchNorm2D(
-                            self.hidden_dim,
-                            weight_attr=ParamAttr(regularizer=L2Decay(0.0)),
-                            bias_attr=ParamAttr(regularizer=L2Decay(0.0))))))
+                        self.hidden_dim,
+                        weight_attr=ParamAttr(regularizer=L2Decay(0.0)),
+                        bias_attr=ParamAttr(regularizer=L2Decay(0.0))))))
             in_channels = self.hidden_dim
 
     def _get_encoder_input(self, feats):
@@ -410,25 +411,25 @@ class RTDETRTransformer(nn.Layer):
 
     def forward(self, feats, pad_mask=None, gt_meta=None):
         # input projection and embedding
-        (memory, spatial_shapes,
-         level_start_index) = self._get_encoder_input(feats)
+        (memory, spatial_shapes, level_start_index) = self._get_encoder_input(feats)
 
+        # 去噪相关
         # prepare denoising training
         if self.training:
             denoising_class, denoising_bbox_unact, attn_mask, dn_meta = \
                 get_contrastive_denoising_training_group(gt_meta,
-                                            self.num_classes,
-                                            self.num_queries,
-                                            self.denoising_class_embed.weight,
-                                            self.num_denoising,
-                                            self.label_noise_ratio,
-                                            self.box_noise_scale)
+                                                         self.num_classes,
+                                                         self.num_queries,
+                                                         self.denoising_class_embed.weight,
+                                                         self.num_denoising,
+                                                         self.label_noise_ratio,
+                                                         self.box_noise_scale)
         else:
             denoising_class, denoising_bbox_unact, attn_mask, dn_meta = None, None, None, None
 
         target, init_ref_points_unact, enc_topk_bboxes, enc_topk_logits = \
             self._get_decoder_input(
-            memory, spatial_shapes, denoising_class, denoising_bbox_unact)
+                memory, spatial_shapes, denoising_class, denoising_bbox_unact)
 
         # decoder
         out_bboxes, out_logits = self.decoder(
@@ -464,7 +465,7 @@ class RTDETRTransformer(nn.Layer):
 
             valid_WH = paddle.to_tensor([w, h]).astype(dtype)
             grid_xy = (grid_xy.unsqueeze(0) + 0.5) / valid_WH
-            wh = paddle.ones_like(grid_xy) * grid_size * (2.0**lvl)
+            wh = paddle.ones_like(grid_xy) * grid_size * (2.0 ** lvl)
             anchors.append(
                 paddle.concat([grid_xy, wh], -1).reshape([-1, h * w, 4]))
 

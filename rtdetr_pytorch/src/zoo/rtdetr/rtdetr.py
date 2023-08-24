@@ -13,7 +13,7 @@ from src.core import register
 __all__ = ['RTDETR', ]
 
 
-# 主模型
+# 主模型,很少的代码
 @register
 class RTDETR(nn.Module):
     __inject__ = ['backbone', 'encoder', 'decoder', ]

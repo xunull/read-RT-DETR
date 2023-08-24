@@ -21,6 +21,8 @@ from .meta_arch import BaseArch
 from ppdet.core.workspace import register, create
 
 __all__ = ['DETR']
+
+
 # Deformable DETR, DINO use the same architecture as DETR
 
 

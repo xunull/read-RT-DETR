@@ -3,15 +3,15 @@ num_classes: 80
 
 TrainDataset:
   name: COCODataSet
-  image_dir: train2017
-  anno_path: annotations/instances_train2017.json
+  image_dir: /mnt/h/ml_dataset_home/coco/train2017
+  anno_path: /mnt/h/ml_dataset_home/coco/annotations/instances_train2017.json
   dataset_dir: dataset/coco
   data_fields: ['image', 'gt_bbox', 'gt_class', 'is_crowd']
 
 EvalDataset:
   name: COCODataSet
-  image_dir: val2017
-  anno_path: annotations/instances_val2017.json
+  image_dir: /mnt/h/ml_dataset_home/coco/val2017
+  anno_path: /mnt/h/ml_dataset_home/coco/instances_val2017.json
   dataset_dir: dataset/coco
   allow_empty: true
 

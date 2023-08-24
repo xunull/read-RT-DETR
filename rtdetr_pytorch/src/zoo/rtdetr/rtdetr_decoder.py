@@ -480,22 +480,25 @@ class RTDETRTransformer(nn.Module):
 
         output_memory = self.enc_output(memory)
 
+        # 类别结果
         enc_outputs_class = self.enc_score_head(output_memory)
+        # 坐标结果
         enc_outputs_coord_unact = self.enc_bbox_head(output_memory) + anchors
 
         _, topk_ind = torch.topk(enc_outputs_class.max(-1).values, self.num_queries, dim=1)
 
-        reference_points_unact = enc_outputs_coord_unact.gather(dim=1, \
-                                                                index=topk_ind.unsqueeze(-1).repeat(1, 1,
-                                                                                                    enc_outputs_coord_unact.shape[
-                                                                                                        -1]))
-
+        # 取出对应的bbox
+        reference_points_unact = enc_outputs_coord_unact.gather(dim=1,
+                                                                index=topk_ind.unsqueeze(-1).
+                                                                repeat(1, 1, enc_outputs_coord_unact.shape[-1]))
+        # 限制在0-1
         enc_topk_bboxes = F.sigmoid(reference_points_unact)
         if denoising_bbox_unact is not None:
             reference_points_unact = torch.concat(
                 [denoising_bbox_unact, reference_points_unact], 1)
 
-        enc_topk_logits = enc_outputs_class.gather(dim=1, \
+        # 取出对应的class
+        enc_topk_logits = enc_outputs_class.gather(dim=1,
                                                    index=topk_ind.unsqueeze(-1).repeat(1, 1,
                                                                                        enc_outputs_class.shape[-1]))
 
@@ -503,7 +506,7 @@ class RTDETRTransformer(nn.Module):
         if self.learnt_init_query:
             target = self.tgt_embed.weight.unsqueeze(0).tile([bs, 1, 1])
         else:
-            target = output_memory.gather(dim=1, \
+            target = output_memory.gather(dim=1,
                                           index=topk_ind.unsqueeze(-1).repeat(1, 1, output_memory.shape[-1]))
 
         if denoising_class is not None:
@@ -520,7 +523,7 @@ class RTDETRTransformer(nn.Module):
         # prepare denoising training
         if self.training and self.num_denoising > 0:
             denoising_class, denoising_bbox_unact, attn_mask, dn_meta = \
-                get_contrastive_denoising_training_group(targets, \
+                get_contrastive_denoising_training_group(targets,
                                                          self.num_classes,
                                                          self.num_queries,
                                                          self.denoising_class_embed,
@@ -530,8 +533,11 @@ class RTDETRTransformer(nn.Module):
         else:
             denoising_class, denoising_bbox_unact, attn_mask, dn_meta = None, None, None, None
 
-        target, init_ref_points_unact, enc_topk_bboxes, enc_topk_logits = \
-            self._get_decoder_input(memory, spatial_shapes, denoising_class, denoising_bbox_unact)
+        # 后两个计算encoder的loss使用
+        target, init_ref_points_unact, enc_topk_bboxes, enc_topk_logits = self._get_decoder_input(memory,
+                                                                                                  spatial_shapes,
+                                                                                                  denoising_class,
+                                                                                                  denoising_bbox_unact)
 
         # decoder
         out_bboxes, out_logits = self.decoder(

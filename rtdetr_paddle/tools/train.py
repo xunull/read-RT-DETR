@@ -25,6 +25,7 @@ sys.path.insert(0, parent_path)
 
 # ignore warning log
 import warnings
+
 warnings.filterwarnings('ignore')
 
 import paddle
@@ -34,6 +35,7 @@ from ppdet.engine import Trainer, init_parallel_env, set_random_seed, init_fleet
 from ppdet.utils.cli import ArgsParser, merge_args
 import ppdet.utils.check as check
 from ppdet.utils.logger import setup_logger
+
 logger = setup_logger('train')
 
 
@@ -56,7 +58,7 @@ def parse_args():
         type=bool,
         default=False,
         help="If set True, enable continuous evaluation job."
-        "This flag is only used for internal test.")
+             "This flag is only used for internal test.")
     parser.add_argument(
         "--amp",
         action='store_true',
@@ -89,8 +91,8 @@ def parse_args():
         type=str,
         default=None,
         help="The option of profiler, which should be in "
-        "format \"key1=value1;key2=value2;key3=value3\"."
-        "please see ppdet/utils/profiler.py for detail.")
+             "format \"key1=value1;key2=value2;key3=value3\"."
+             "please see ppdet/utils/profiler.py for detail.")
     parser.add_argument(
         '--save_proposals',
         action='store_true',

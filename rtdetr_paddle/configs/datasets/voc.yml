@@ -7,14 +7,14 @@ TrainDataset:
   dataset_dir: dataset/voc
   anno_path: trainval.txt
   label_list: label_list.txt
-  data_fields: ['image', 'gt_bbox', 'gt_class', 'difficult']
+  data_fields: [ 'image', 'gt_bbox', 'gt_class', 'difficult' ]
 
 EvalDataset:
   name: VOCDataSet
   dataset_dir: dataset/voc
   anno_path: test.txt
   label_list: label_list.txt
-  data_fields: ['image', 'gt_bbox', 'gt_class', 'difficult']
+  data_fields: [ 'image', 'gt_bbox', 'gt_class', 'difficult' ]
 
 TestDataset:
   name: ImageFolder
