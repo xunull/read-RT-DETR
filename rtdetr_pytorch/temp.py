@@ -7,12 +7,20 @@ with open('/mnt/h/ml_dataset_home/coco/annotations/instances_train2017.json') as
     data = json.load(file)
     origin = data.copy()
     images = data['images']
+    print("原始images 数量 {}".format(len(images)))
     annos = data['annotations']
     no_anno = []
     id_anno = defaultdict(list)
     for anno in annos:
         id = anno['image_id']
         id_anno[id].append(anno)
+        bbox = anno.get('bbox', None)
+        if bbox is None:
+            print("anno {} no bbox".format(anno['id']))
+        else:
+            if len(bbox) == 0:
+                print("anno {} no bbox".format(anno['id']))
+
 
     valid_image = []
     invalid_image_id = []
@@ -26,7 +34,12 @@ with open('/mnt/h/ml_dataset_home/coco/annotations/instances_train2017.json') as
 
     data['images'] = valid_image
 
-    with open(new_file, 'w') as newf:
-        json.dump(data, newf, indent=4)
+    print(len(data['images']))
+
+    # with open(new_file, 'w') as newf:
+    #     json.dump(data, newf, indent=4)
 
     print("新文件制作完成")
+
+# Loaded 118287 images in COCO format from /mnt/h/ml_dataset_home/coco/annotations/instances_train2017.json
+# Removed 1021 images with no usable annotations. 117266 images left.
