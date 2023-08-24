@@ -14,7 +14,7 @@ train_dataloader:
       ops: ~
   # remap_mscoco_category: True
   shuffle: True
-  batch_size: 8
+  batch_size: 1
   num_workers: 4
   drop_last: True
 
@@ -30,6 +30,6 @@ val_dataloader:
       ops: ~
 
   shuffle: False
-  batch_size: 8
+  batch_size: 1
   num_workers: 4
   drop_last: False
