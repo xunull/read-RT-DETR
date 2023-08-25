@@ -58,6 +58,7 @@ This is the official implementation of the paper "[DETRs Beat YOLOs on Real-time
 | RT-DETR-R101 | 6x | 640 | COCO | 54.3 | 72.7 | 76 | 259 | 74 |
 | RT-DETR-HGNetv2-L | 6x | 640 | COCO | 53.0 | 71.6 | 32 | 110 | 114 |
 | RT-DETR-HGNetv2-X | 6x | 640 | COCO | 54.8 | 73.1 | 67 | 234 | 74 |
+| RT-DETR-R18 | 5x | 640 | COCO + Objects365 | **49.2** | **66.6** | 20 | 60 | **217** |
 | RT-DETR-R50 | 2x | 640 | COCO + Objects365 | **55.3** | **73.4** | 42 | 136 | **108** |
 | RT-DETR-R101 | 2x | 640 | COCO + Objects365 | **56.2** | **74.6** | 76 | 259 | **74** |
 
@@ -68,9 +69,9 @@ This is the official implementation of the paper "[DETRs Beat YOLOs on Real-time
 ## Introduction
 We propose a **R**eal-**T**ime **DE**tection **TR**ansformer (RT-DETR), the first real-time end-to-end object detector to our best knowledge. Our RT-DETR-L achieves 53.0% AP on COCO val2017 and 114 FPS on T4 GPU, while RT-DETR-X achieves 54.8% AP and 74 FPS, outperforming all YOLO detectors of the same scale in both speed and accuracy. Furthermore, our RT-DETR-R50 achieves 53.1% AP and 108 FPS, outperforming DINO-Deformable-DETR-R50 by 2.2% AP in accuracy and by about 21 times in FPS. 
 <div align="center">
-  <img src="https://github.com/PaddlePaddle/PaddleDetection/assets/17582080/3184a08e-aa4d-49cf-9079-f3695c4cc1c3" width=500 />
+  <!-- <img src="https://github.com/PaddlePaddle/PaddleDetection/assets/17582080/3184a08e-aa4d-49cf-9079-f3695c4cc1c3" width=300 /> -->
+  <img src="https://github.com/lyuwenyu/RT-DETR/assets/17582080/42636690-1ecf-4647-b075-842ecb9bc562" width=500 >
 </div>
-
 
 ## Citation
 If you use `RT-DETR` in your work, please use the following BibTeX entries:
