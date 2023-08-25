@@ -33,6 +33,7 @@ class MLP(nn.Module):
         return x
 
 
+# 变形Attention
 class MSDeformableAttention(nn.Module):
     def __init__(self, embed_dim=256, num_heads=8, num_levels=4, num_points=4, ):
         """
@@ -136,6 +137,7 @@ class MSDeformableAttention(nn.Module):
         return output
 
 
+# 正常的Decoder处理
 class TransformerDecoderLayer(nn.Module):
     def __init__(self,
                  d_model=256,
@@ -327,6 +329,7 @@ class RTDETRTransformer(nn.Module):
                                                 num_decoder_points)
         self.decoder = TransformerDecoder(hidden_dim, decoder_layer, num_decoder_layers, eval_idx)
 
+        # 去噪
         self.num_denoising = num_denoising
         self.label_noise_ratio = label_noise_ratio
         self.box_noise_scale = box_noise_scale
@@ -346,14 +349,18 @@ class RTDETRTransformer(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.LayerNorm(hidden_dim, )
         )
+        # encoder 的输出 得出分类分数
         self.enc_score_head = nn.Linear(hidden_dim, num_classes)
+        # encoder 的输出 得出bbox坐标
         self.enc_bbox_head = MLP(hidden_dim, hidden_dim, 4, num_layers=3)
 
         # decoder head
+        # 每一个decoder都有一个分类头
         self.dec_score_head = nn.ModuleList([
             nn.Linear(hidden_dim, num_classes)
             for _ in range(num_decoder_layers)
         ])
+        # 每一个decoder都有一个bbox头
         self.dec_bbox_head = nn.ModuleList([
             MLP(hidden_dim, hidden_dim, 4, num_layers=3)
             for _ in range(num_decoder_layers)
@@ -405,9 +412,12 @@ class RTDETRTransformer(nn.Module):
             )
             in_channels = self.hidden_dim
 
+    # 特征层的特征 -> token, 以及位置编码，level编码等
     def _get_encoder_input(self, feats):
+
         # get projection features
         proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
+
         if self.num_levels > len(proj_feats):
             len_srcs = len(proj_feats)
             for i in range(len_srcs, self.num_levels):
@@ -420,6 +430,7 @@ class RTDETRTransformer(nn.Module):
         feat_flatten = []
         spatial_shapes = []
         level_start_index = [0, ]
+
         for i, feat in enumerate(proj_feats):
             _, _, h, w = feat.shape
             # [b, c, h, w] -> [b, h*w, c]
@@ -432,6 +443,7 @@ class RTDETRTransformer(nn.Module):
         # [b, l, c]
         feat_flatten = torch.concat(feat_flatten, 1)
         level_start_index.pop()
+
         return (feat_flatten, spatial_shapes, level_start_index)
 
     def _generate_anchors(self,
@@ -445,8 +457,8 @@ class RTDETRTransformer(nn.Module):
                               ]
         anchors = []
         for lvl, (h, w) in enumerate(spatial_shapes):
-            grid_y, grid_x = torch.meshgrid( \
-                torch.arange(end=h, dtype=dtype), \
+            grid_y, grid_x = torch.meshgrid(
+                torch.arange(end=h, dtype=dtype),
                 torch.arange(end=w, dtype=dtype), indexing='ij')
             grid_xy = torch.stack([grid_x, grid_y], -1)
             valid_WH = torch.tensor([w, h]).to(dtype)
@@ -463,6 +475,7 @@ class RTDETRTransformer(nn.Module):
 
         return anchors, valid_mask
 
+    # 计算出decoder的input
     def _get_decoder_input(self,
                            memory,
                            spatial_shapes,
@@ -473,16 +486,18 @@ class RTDETRTransformer(nn.Module):
         if self.training or self.eval_spatial_size is None:
             anchors, valid_mask = self._generate_anchors(spatial_shapes, device=memory.device)
         else:
+            # 在init时候默认生成的
             anchors, valid_mask = self.anchors.to(memory.device), self.valid_mask.to(memory.device)
 
         # memory = torch.where(valid_mask, memory, 0)
         memory = valid_mask.to(memory.dtype) * memory  # TODO fix type error for onnx export 
 
+        # 经过一个Linear
         output_memory = self.enc_output(memory)
 
-        # 类别结果
+        # encoder 类别结果
         enc_outputs_class = self.enc_score_head(output_memory)
-        # 坐标结果
+        # encoder 坐标结果
         enc_outputs_coord_unact = self.enc_bbox_head(output_memory) + anchors
 
         _, topk_ind = torch.topk(enc_outputs_class.max(-1).values, self.num_queries, dim=1)
@@ -494,8 +509,7 @@ class RTDETRTransformer(nn.Module):
         # 限制在0-1
         enc_topk_bboxes = F.sigmoid(reference_points_unact)
         if denoising_bbox_unact is not None:
-            reference_points_unact = torch.concat(
-                [denoising_bbox_unact, reference_points_unact], 1)
+            reference_points_unact = torch.concat([denoising_bbox_unact, reference_points_unact], 1)
 
         # 取出对应的class
         enc_topk_logits = enc_outputs_class.gather(dim=1,
@@ -516,6 +530,7 @@ class RTDETRTransformer(nn.Module):
 
     def forward(self, feats, targets=None):
 
+        # 得到encoder的input
         # input projection and embedding
         (memory, spatial_shapes, level_start_index) = self._get_encoder_input(feats)
 
@@ -533,6 +548,7 @@ class RTDETRTransformer(nn.Module):
         else:
             denoising_class, denoising_bbox_unact, attn_mask, dn_meta = None, None, None, None
 
+        # 得到 decoder 的input
         # 后两个计算encoder的loss使用
         target, init_ref_points_unact, enc_topk_bboxes, enc_topk_logits = self._get_decoder_input(memory,
                                                                                                   spatial_shapes,
@@ -558,7 +574,9 @@ class RTDETRTransformer(nn.Module):
         out = {'pred_logits': out_logits[-1], 'pred_boxes': out_bboxes[-1]}
 
         if self.training and self.aux_loss:
+            # decoder 前几层的
             out['aux_outputs'] = self._set_aux_loss(out_logits[:-1], out_bboxes[:-1])
+            # encoder的输出的
             out['aux_outputs'].extend(self._set_aux_loss([enc_topk_logits], [enc_topk_bboxes]))
 
             if self.training and self.num_denoising > 0:
@@ -572,5 +590,4 @@ class RTDETRTransformer(nn.Module):
         # this is a workaround to make torchscript happy, as torchscript
         # doesn't support dictionary with non-homogeneous values, such
         # as a dict having both a Tensor and a list.
-        return [{'pred_logits': a, 'pred_boxes': b}
-                for a, b in zip(outputs_class, outputs_coord)]
+        return [{'pred_logits': a, 'pred_boxes': b} for a, b in zip(outputs_class, outputs_coord)]
