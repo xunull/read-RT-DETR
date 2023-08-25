@@ -32,9 +32,9 @@ class RTDETR(nn.Module):
             x = F.interpolate(x, size=[sz, sz])
         # 经过backbone
         x = self.backbone(x)
-        # 经过encoder
+        # 经过encoder, HybridEncoder
         x = self.encoder(x)
-        # 经过decoder
+        # 经过decoder, RTDETRTransformer (这里其实只有正常意义上的decoder)
         x = self.decoder(x, targets)
 
         return x

@@ -88,6 +88,7 @@ class RepVggBlock(nn.Module):
         return kernel * t, beta - running_mean * gamma / std
 
 
+# Figure 4的那个操作
 class CSPRepLayer(nn.Module):
     def __init__(self,
                  in_channels,
@@ -109,10 +110,14 @@ class CSPRepLayer(nn.Module):
         else:
             self.conv3 = nn.Identity()
 
+    # Figure 4的操作
     def forward(self, x):
+        # Figure 4 的下路
         x_1 = self.conv1(x)
         x_1 = self.bottlenecks(x_1)
+        # Figure 4 的上路
         x_2 = self.conv2(x)
+        # 上下路 element-wise add
         return self.conv3(x_1 + x_2)
 
 
@@ -165,6 +170,8 @@ class TransformerEncoderLayer(nn.Module):
         return src
 
 
+# 被HybridEncoder使用
+# 包装上面的encoder，主要是处理几层encoder
 class TransformerEncoder(nn.Module):
     def __init__(self, encoder_layer, num_layers, norm=None):
         super(TransformerEncoder, self).__init__()
@@ -174,7 +181,7 @@ class TransformerEncoder(nn.Module):
 
     def forward(self, src, src_mask=None, pos_embed=None) -> torch.Tensor:
         output = src
-        # 经过encoder
+        # 经过encoder，上面定义的那个TransformerEncoderLayer
         for layer in self.layers:
             output = layer(output, src_mask=src_mask, pos_embed=pos_embed)
 
@@ -204,6 +211,7 @@ class HybridEncoder(nn.Module):
                  depth_mult=1.0,
                  act='silu',
                  eval_size=None):
+
         super().__init__()
         self.in_channels = in_channels
         self.feat_strides = feat_strides
@@ -219,6 +227,7 @@ class HybridEncoder(nn.Module):
         # 2d feature to transformer token
         # channel projection
         self.input_proj = nn.ModuleList()
+
         for in_channel in in_channels:
             self.input_proj.append(
                 nn.Sequential(
@@ -236,6 +245,7 @@ class HybridEncoder(nn.Module):
             activation=enc_act)
 
         # 几层encoder（论文中是1个）
+        # use_encoder_idx 只有最后一层S5，同时对S5仅使用一个encoder层
         self.encoder = nn.ModuleList([
             TransformerEncoder(copy.deepcopy(encoder_layer), num_encoder_layers) for _ in range(len(use_encoder_idx))
         ])
@@ -243,8 +253,12 @@ class HybridEncoder(nn.Module):
         # top-down fpn
         self.lateral_convs = nn.ModuleList()
         self.fpn_blocks = nn.ModuleList()
+
+        # 2 1
         for _ in range(len(in_channels) - 1, 0, -1):
+            # 一层卷积 Figure 3 中的黄色块
             self.lateral_convs.append(ConvNormLayer(hidden_dim, hidden_dim, 1, 1, act=act))
+            # Figure4 那个操作
             self.fpn_blocks.append(
                 CSPRepLayer(hidden_dim * 2, hidden_dim, round(3 * depth_mult), act=act, expansion=expansion)
             )
@@ -252,10 +266,11 @@ class HybridEncoder(nn.Module):
         # bottom-up pan
         self.downsample_convs = nn.ModuleList()
         self.pan_blocks = nn.ModuleList()
+
+        # 0 1
         for _ in range(len(in_channels) - 1):
-            self.downsample_convs.append(
-                ConvNormLayer(hidden_dim, hidden_dim, 3, 2, act=act)
-            )
+            # 一层卷积 Figure3 中的蓝色块，下采样，就是继续卷积一下
+            self.downsample_convs.append(ConvNormLayer(hidden_dim, hidden_dim, 3, 2, act=act))
             self.pan_blocks.append(
                 CSPRepLayer(hidden_dim * 2, hidden_dim, round(3 * depth_mult), act=act, expansion=expansion)
             )
@@ -292,6 +307,7 @@ class HybridEncoder(nn.Module):
 
     def forward(self, feats):
         assert len(feats) == len(self.in_channels)
+
         # 2d feature to transformer token
         proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
 
@@ -309,9 +325,9 @@ class HybridEncoder(nn.Module):
                 else:
                     pos_embed = getattr(self, f'pos_embed{enc_ind}', None).to(src_flatten.device)
 
-                # 经过encoder
+                # 经过encoder,s5的特征经过了encoder
                 memory = self.encoder[i](src_flatten, pos_embed=pos_embed)
-                # s5的特征经过了encoder
+
                 proj_feats[enc_ind] = memory.permute(0, 2, 1).reshape(-1, self.hidden_dim, h, w).contiguous()
                 # print([x.is_contiguous() for x in proj_feats ])
 
@@ -320,20 +336,53 @@ class HybridEncoder(nn.Module):
 
         # idx = 2, 1
         for idx in range(len(self.in_channels) - 1, 0, -1):
+            # 第一次循环是S5（经过Attention的）
             feat_heigh = inner_outs[0]
+            # 1, 0
+            # 第一次是S4，第二次是S3
             feat_low = proj_feats[idx - 1]
+            # 0, 1
+            # Figure3 中的黄色块
             feat_heigh = self.lateral_convs[len(self.in_channels) - 1 - idx](feat_heigh)
+            # 更新了inner_outs[0]
             inner_outs[0] = feat_heigh
+            # 上采样
             upsample_feat = F.interpolate(feat_heigh, scale_factor=2., mode='nearest')
+            # concat，对应于Figure4中一开始就将两个特征进行cat
+            # 取第0 1 两个CCFM
+            # S5 经过上采样之后的特征 和 S4的特征进行CCFM
             inner_out = self.fpn_blocks[len(self.in_channels) - 1 - idx](torch.concat([upsample_feat, feat_low], dim=1))
+            # 插入到最前方，上面取feat_heigh的又是一个新的
+            # 在一次循环中，更新了两次inner_outs的内容
             inner_outs.insert(0, inner_out)
+        # 第一次循环后, inner_outs的内容为 [CCFM(S5->黄色块->上采样，S4), S5->黄色块]
+        # 第二次循环使用的是 CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块然后上采样 和 S3的内容进行CCFM
+        # 第二次循环后, inner_outs的内容为 [CCFM( CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块然后上采样, S3),
+        #                                CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块,
+        #                                S5->黄色块]
 
+        # outs 为 CCFM( CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块然后上采样, S3)
+        # 第一个为 Figure 3中CCFM中的最下面的黑线
         outs = [inner_outs[0]]
+
+        # 0 1
         for idx in range(len(self.in_channels) - 1):
+            # 第一次为 CCFM( CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块然后上采样, S3) 的结果
+            # 第二次为上一次的结果
             feat_low = outs[-1]
+            # 第一次为 CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块
             feat_height = inner_outs[idx + 1]
+            # 下采样
+            # 第一次为 CCFM( CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块然后上采样, S3) 的结果 然后上采样
             downsample_feat = self.downsample_convs[idx](feat_low)
+            # 经过CCFM
+            # 第一次为 CCFM( CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块然后上采样, S3) 的结果 然后上采样
+            # 和  第一次为 CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块
+
             out = self.pan_blocks[idx](torch.concat([downsample_feat, feat_height], dim=1))
+
+            # 第一次添加的为Figure 3中 CCFM中的第二个黑线
+            # 第二次添加的为Figure 3中 CCFM中的最上面的黑线
             outs.append(out)
 
         return outs

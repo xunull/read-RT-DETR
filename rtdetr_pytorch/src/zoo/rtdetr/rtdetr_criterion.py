@@ -49,6 +49,7 @@ class SetCriterion(nn.Module):
         self.alpha = alpha
         self.gamma = gamma
 
+    # F.cross_entropy
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
         """Classification loss (NLL)
         targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
@@ -70,6 +71,7 @@ class SetCriterion(nn.Module):
             losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0]
         return losses
 
+    # F.binary_cross_entropy_with_logits
     def loss_labels_bce(self, outputs, targets, indices, num_boxes, log=True):
         src_logits = outputs['pred_logits']
         idx = self._get_src_permutation_idx(indices)
@@ -83,6 +85,7 @@ class SetCriterion(nn.Module):
         loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
         return {'loss_bce': loss}
 
+    # sigmoid_focal_loss
     def loss_labels_focal(self, outputs, targets, indices, num_boxes, log=True):
         assert 'pred_logits' in outputs
         src_logits = outputs['pred_logits']
@@ -114,16 +117,19 @@ class SetCriterion(nn.Module):
         # 计算iou
         ious, _ = box_iou(box_cxcywh_to_xyxy(src_boxes), box_cxcywh_to_xyxy(target_boxes))
         ious = torch.diag(ious).detach()
-
+        # 预测的值
         src_logits = outputs['pred_logits']
         target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
         target_classes = torch.full(src_logits.shape[:2], self.num_classes,
                                     dtype=torch.int64, device=src_logits.device)
+        # 填上GT的label值
         target_classes[idx] = target_classes_o
         target = F.one_hot(target_classes, num_classes=self.num_classes + 1)[..., :-1]
 
         target_score_o = torch.zeros_like(target_classes, dtype=src_logits.dtype)
+        # 填上IoU的值
         target_score_o[idx] = ious.to(target_score_o.dtype)
+        # IoU和GT相乘
         target_score = target_score_o.unsqueeze(-1) * target
 
         pred_score = F.sigmoid(src_logits).detach()
@@ -216,6 +222,7 @@ class SetCriterion(nn.Module):
             'boxes': self.loss_boxes,
             'masks': self.loss_masks,
             # 多的loss
+            # todo 用这么多类别相关的loss？
             'bce': self.loss_labels_bce,
             'focal': self.loss_labels_focal,
             'vfl': self.loss_labels_vfl,
