@@ -40,7 +40,7 @@ class SetCriterion(nn.Module):
         self.num_classes = num_classes
         self.matcher = matcher
         self.weight_dict = weight_dict
-        self.losses = losses
+        self.losses = losses  # ['vfl','boxes']
 
         empty_weight = torch.ones(self.num_classes + 1)
         empty_weight[-1] = eos_coef
@@ -222,7 +222,6 @@ class SetCriterion(nn.Module):
             'boxes': self.loss_boxes,
             'masks': self.loss_masks,
             # 多的loss
-            # todo 用这么多类别相关的loss？
             'bce': self.loss_labels_bce,
             'focal': self.loss_labels_focal,
             'vfl': self.loss_labels_vfl,

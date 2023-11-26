@@ -13,7 +13,8 @@ from src.core import register
 __all__ = ['HybridEncoder']
 
 
-# 卷积然后norm
+# 一次conv卷积
+# 卷积然后norm然后激活
 class ConvNormLayer(nn.Module):
     def __init__(self, ch_in, ch_out, kernel_size, stride, padding=None, bias=False, act=None):
         super().__init__()
@@ -51,7 +52,7 @@ class RepVggBlock(nn.Module):
 
         return self.act(y)
 
-    # todo deploy的时候不一样了吗？
+    # deploy时，将两层conv的weight和bias进行了融合，置入一个conv中
     def convert_to_deploy(self):
         if not hasattr(self, 'conv'):
             self.conv = nn.Conv2d(self.ch_in, self.ch_out, 3, 1, padding=1)
@@ -98,13 +99,17 @@ class CSPRepLayer(nn.Module):
                  bias=None,
                  act="silu"):
         super(CSPRepLayer, self).__init__()
+        # expansion=1时没有变化
+        # expansion=0.5 卷积时内部的channel数量为一半
         hidden_channels = int(out_channels * expansion)
+        # 图4，上下两条线的1x1 conv
         self.conv1 = ConvNormLayer(in_channels, hidden_channels, 1, 1, bias=bias, act=act)
         self.conv2 = ConvNormLayer(in_channels, hidden_channels, 1, 1, bias=bias, act=act)
-        # todo
+        # 重复N词
         self.bottlenecks = nn.Sequential(*[
             RepVggBlock(hidden_channels, hidden_channels, act=act) for _ in range(num_blocks)
         ])
+        # 如果设置的expansion != 1的时候，如0.5,那么最后要将channel变回去
         if hidden_channels != out_channels:
             self.conv3 = ConvNormLayer(hidden_channels, out_channels, 1, 1, bias=bias, act=act)
         else:
@@ -121,7 +126,7 @@ class CSPRepLayer(nn.Module):
         return self.conv3(x_1 + x_2)
 
 
-# 最内的encoder layer，就是一个正常的attention
+# encoder layer，就是一个正常的attention
 class TransformerEncoderLayer(nn.Module):
     def __init__(self,
                  d_model,
@@ -174,6 +179,9 @@ class TransformerEncoderLayer(nn.Module):
 # 包装上面的encoder，主要是处理几层encoder
 class TransformerEncoder(nn.Module):
     def __init__(self, encoder_layer, num_layers, norm=None):
+        """
+        num_layers 只有1，论文中提到了只使用一层注意力计算
+        """
         super(TransformerEncoder, self).__init__()
         self.layers = nn.ModuleList([copy.deepcopy(encoder_layer) for _ in range(num_layers)])
         self.num_layers = num_layers
@@ -203,10 +211,12 @@ class HybridEncoder(nn.Module):
                  dropout=0.0,
                  enc_act='gelu',
                  # s3 s4 s5, s5的index为2
+                 # 只有s5 进行attention计算
                  use_encoder_idx=[2],
                  # encoder的层数
                  num_encoder_layers=1,
                  pe_temperature=10000,
+                 # todo
                  expansion=1.0,
                  depth_mult=1.0,
                  act='silu',
@@ -288,8 +298,9 @@ class HybridEncoder(nn.Module):
 
     @staticmethod
     def build_2d_sincos_position_embedding(w, h, embed_dim=256, temperature=10000.):
-        '''
-        '''
+        """
+        高频位置编码
+        """
         grid_w = torch.arange(int(w), dtype=torch.float32)
         grid_h = torch.arange(int(h), dtype=torch.float32)
         grid_w, grid_h = torch.meshgrid(grid_w, grid_h, indexing='ij')
@@ -306,7 +317,8 @@ class HybridEncoder(nn.Module):
 
     def forward(self, feats):
         assert len(feats) == len(self.in_channels)
-
+        # 顺序是 s3,s4,s5
+        # [bs,c,h,w]
         # 2d feature to transformer token
         proj_feats = [self.input_proj[i](feat) for i, feat in enumerate(feats)]
 
@@ -317,6 +329,7 @@ class HybridEncoder(nn.Module):
             for i, enc_ind in enumerate(self.use_encoder_idx):
                 h, w = proj_feats[enc_ind].shape[2:]
                 # flatten [B, C, H, W] to [B, HxW, C]
+                # 高宽推平，然后和channel换位
                 src_flatten = proj_feats[enc_ind].flatten(2).permute(0, 2, 1)
                 if self.training or self.eval_spatial_size is None:
                     pos_embed = self.build_2d_sincos_position_embedding(
@@ -326,16 +339,19 @@ class HybridEncoder(nn.Module):
 
                 # 经过encoder,s5的特征经过了encoder
                 memory = self.encoder[i](src_flatten, pos_embed=pos_embed)
-
+                # 将s5输出的结果放回到proj_feats
+                # [bs,hw,256] -> [bs,256,hw] -> [bs,256,h,w]
                 proj_feats[enc_ind] = memory.permute(0, 2, 1).reshape(-1, self.hidden_dim, h, w).contiguous()
                 # print([x.is_contiguous() for x in proj_feats ])
 
         # broadcasting and fusion
+        # s5
         inner_outs = [proj_feats[-1]]
 
         # idx = 2, 1
         for idx in range(len(self.in_channels) - 1, 0, -1):
-            # 第一次循环是S5（经过Attention的）
+            # 第一次循环是S5（经过Attention的）,s5在上面放进去的，当时只有s5
+            # 第二次时，是insert 0 的，计算后的结果
             feat_heigh = inner_outs[0]
             # 1, 0
             # 第一次是S4，第二次是S3
@@ -361,7 +377,7 @@ class HybridEncoder(nn.Module):
         #                                S5->黄色块]
 
         # outs 为 CCFM( CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块然后上采样, S3)
-        # 第一个为 Figure 3中CCFM中的最下面的黑线
+        # 第一个为 Figure 3中最下面Fusion向上的蓝色线
         outs = [inner_outs[0]]
 
         # 0 1

@@ -51,7 +51,14 @@ class CocoDetection(torchvision.datasets.CocoDetection):
             target['masks'] = datapoints.Mask(target['masks'])
 
         if self._transforms is not None:
-            img, target = self._transforms(img, target)
+            try:
+                img, target = self._transforms(img, target)
+            except Exception as e:
+                # 这个地方torch的2.0.0版本会报错
+                # https://github.com/lyuwenyu/RT-DETR/issues/68
+                # 安装特定版本的torch
+                # pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cpu
+                _ = img
             
         return img, target
 

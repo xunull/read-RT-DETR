@@ -23,10 +23,11 @@ class RTDETR(nn.Module):
         self.backbone = backbone
         self.decoder = decoder
         self.encoder = encoder
+        # 图像的多种尺寸 [480, 512, 544, 576, 608, 640, 640, 640, 672, 704, 736, 768, 800]
         self.multi_scale = multi_scale
 
     def forward(self, x, targets=None):
-        # todo
+        # 随机选择一种图像尺寸，对x（输入的图像）进行插值，进行缩放
         if self.multi_scale and self.training:
             sz = np.random.choice(self.multi_scale)
             x = F.interpolate(x, size=[sz, sz])
