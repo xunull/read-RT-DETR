@@ -352,21 +352,21 @@ class HybridEncoder(nn.Module):
         for idx in range(len(self.in_channels) - 1, 0, -1):
             # 第一次循环是S5（经过Attention的）,s5在上面放进去的，当时只有s5
             # 第二次时，是insert 0 的，计算后的结果
-            feat_heigh = inner_outs[0]
+            feat_high = inner_outs[0]
             # 1, 0
             # 第一次是S4，第二次是S3
             feat_low = proj_feats[idx - 1]
             # 0, 1
             # Figure3 中的黄色块
-            feat_heigh = self.lateral_convs[len(self.in_channels) - 1 - idx](feat_heigh)
+            feat_high = self.lateral_convs[len(self.in_channels) - 1 - idx](feat_high)
             # 更新了inner_outs[0]
-            inner_outs[0] = feat_heigh
+            inner_outs[0] = feat_high
             # 上采样
-            upsample_feat = F.interpolate(feat_heigh, scale_factor=2., mode='nearest')
+            upsample_feat = F.interpolate(feat_high, scale_factor=2., mode='nearest')
             # concat，对应于Figure4中一开始就将两个特征进行cat
             # 取第0 1 两个CCFM
             # S5 经过上采样之后的特征 和 S4的特征进行CCFM
-            inner_out = self.fpn_blocks[len(self.in_channels) - 1 - idx](torch.concat([upsample_feat, feat_low], dim=1))
+            inner_out = self.fpn_blocks[len(self.in_channels)-1-idx](torch.concat([upsample_feat, feat_low], dim=1))
             # 插入到最前方，上面取feat_heigh的又是一个新的
             # 在一次循环中，更新了两次inner_outs的内容
             inner_outs.insert(0, inner_out)
@@ -386,7 +386,7 @@ class HybridEncoder(nn.Module):
             # 第二次为上一次的结果
             feat_low = outs[-1]
             # 第一次为 CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块
-            feat_height = inner_outs[idx + 1]
+            feat_high = inner_outs[idx + 1]
             # 下采样
             # 第一次为 CCFM( CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块然后上采样, S3) 的结果 然后上采样
             downsample_feat = self.downsample_convs[idx](feat_low)
@@ -394,7 +394,7 @@ class HybridEncoder(nn.Module):
             # 第一次为 CCFM( CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块然后上采样, S3) 的结果 然后上采样
             # 和  第一次为 CCFM(S5->黄色块->上采样，S4)的结果，经过一个黄色块
 
-            out = self.pan_blocks[idx](torch.concat([downsample_feat, feat_height], dim=1))
+            out = self.pan_blocks[idx](torch.concat([downsample_feat, feat_high], dim=1))
 
             # 第一次添加的为Figure 3中 CCFM中的第二个黑线
             # 第二次添加的为Figure 3中 CCFM中的最上面的黑线
